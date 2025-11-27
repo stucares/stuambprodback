@@ -1,0 +1,244 @@
+const { Ambassador, Task, Referral } = require('../models');
+const { Op } = require('sequelize');
+
+// Get All Ambassadors
+exports.getAllAmbassadors = async (req, res) => {
+  try {
+    const ambassadors = await Ambassador.findAll({
+      attributes: { exclude: ['password'] },
+      order: [['createdAt', 'DESC']],
+      include: [{
+        model: Referral,
+        as: 'referrals',
+        attributes: ['id', 'status', 'pointsEarned']
+      }]
+    });
+
+    res.json({
+      success: true,
+      ambassadors
+    });
+  } catch (error) {
+    console.error('Get ambassadors error:', error);
+    res.status(500).json({ message: 'Failed to fetch ambassadors' });
+  }
+};
+
+// Get Single Ambassador
+exports.getAmbassador = async (req, res) => {
+  try {
+    const ambassador = await Ambassador.findByPk(req.params.id, {
+      attributes: { exclude: ['password'] },
+      include: [{
+        model: Referral,
+        as: 'referrals'
+      }]
+    });
+
+    if (!ambassador) {
+      return res.status(404).json({ message: 'Ambassador not found' });
+    }
+
+    res.json({
+      success: true,
+      ambassador
+    });
+  } catch (error) {
+    console.error('Get ambassador error:', error);
+    res.status(500).json({ message: 'Failed to fetch ambassador' });
+  }
+};
+
+// Update Ambassador Stats (Manual)
+exports.updateAmbassadorStats = async (req, res) => {
+  try {
+    const { referralCount, creditPoints } = req.body;
+    
+    const ambassador = await Ambassador.findByPk(req.params.id);
+    
+    if (!ambassador) {
+      return res.status(404).json({ message: 'Ambassador not found' });
+    }
+
+    if (referralCount !== undefined) {
+      ambassador.referralCount = referralCount;
+      ambassador.updateLevel(); // Update level based on new referral count
+    }
+    
+    if (creditPoints !== undefined) {
+      ambassador.creditPoints = creditPoints;
+    }
+
+    await ambassador.save();
+
+    res.json({
+      success: true,
+      message: 'Ambassador stats updated successfully',
+      ambassador: {
+        id: ambassador.id,
+        name: ambassador.name,
+        referralCount: ambassador.referralCount,
+        creditPoints: ambassador.creditPoints,
+        level: ambassador.level
+      }
+    });
+  } catch (error) {
+    console.error('Update stats error:', error);
+    res.status(500).json({ message: 'Failed to update ambassador stats' });
+  }
+};
+
+// Toggle Ambassador Active Status
+exports.toggleAmbassadorStatus = async (req, res) => {
+  try {
+    const ambassador = await Ambassador.findByPk(req.params.id);
+    
+    if (!ambassador) {
+      return res.status(404).json({ message: 'Ambassador not found' });
+    }
+
+    ambassador.isActive = !ambassador.isActive;
+    await ambassador.save();
+
+    res.json({
+      success: true,
+      message: `Ambassador ${ambassador.isActive ? 'activated' : 'deactivated'} successfully`,
+      isActive: ambassador.isActive
+    });
+  } catch (error) {
+    console.error('Toggle status error:', error);
+    res.status(500).json({ message: 'Failed to update ambassador status' });
+  }
+};
+
+// Create Task
+exports.createTask = async (req, res) => {
+  try {
+    const { title, description, productLink, messageTemplate, pointsReward } = req.body;
+
+    if (!title || !description || !productLink || !messageTemplate) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    const task = await Task.create({
+      title,
+      description,
+      productLink,
+      messageTemplate,
+      pointsReward: pointsReward || 0
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Task created successfully',
+      task
+    });
+  } catch (error) {
+    console.error('Create task error:', error);
+    res.status(500).json({ message: 'Failed to create task' });
+  }
+};
+
+// Get All Tasks
+exports.getAllTasks = async (req, res) => {
+  try {
+    const tasks = await Task.findAll({
+      order: [['createdAt', 'DESC']]
+    });
+
+    res.json({
+      success: true,
+      tasks
+    });
+  } catch (error) {
+    console.error('Get tasks error:', error);
+    res.status(500).json({ message: 'Failed to fetch tasks' });
+  }
+};
+
+// Update Task
+exports.updateTask = async (req, res) => {
+  try {
+    const task = await Task.findByPk(req.params.id);
+    
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+
+    const { title, description, productLink, messageTemplate, pointsReward, isActive } = req.body;
+
+    if (title) task.title = title;
+    if (description) task.description = description;
+    if (productLink) task.productLink = productLink;
+    if (messageTemplate) task.messageTemplate = messageTemplate;
+    if (pointsReward !== undefined) task.pointsReward = pointsReward;
+    if (isActive !== undefined) task.isActive = isActive;
+
+    await task.save();
+
+    res.json({
+      success: true,
+      message: 'Task updated successfully',
+      task
+    });
+  } catch (error) {
+    console.error('Update task error:', error);
+    res.status(500).json({ message: 'Failed to update task' });
+  }
+};
+
+// Delete Task
+exports.deleteTask = async (req, res) => {
+  try {
+    const task = await Task.findByPk(req.params.id);
+    
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+
+    await task.destroy();
+
+    res.json({
+      success: true,
+      message: 'Task deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete task error:', error);
+    res.status(500).json({ message: 'Failed to delete task' });
+  }
+};
+
+// Get Dashboard Stats
+exports.getDashboardStats = async (req, res) => {
+  try {
+    const totalAmbassadors = await Ambassador.count();
+    const activeAmbassadors = await Ambassador.count({ where: { isActive: true } });
+    const totalTasks = await Task.count();
+    const activeTasks = await Task.count({ where: { isActive: true } });
+    const totalReferrals = await Referral.count();
+    const completedReferrals = await Referral.count({ where: { status: 'completed' } });
+
+    // Get top ambassadors
+    const topAmbassadors = await Ambassador.findAll({
+      order: [['referralCount', 'DESC']],
+      limit: 10,
+      attributes: ['id', 'name', 'email', 'referralCount', 'creditPoints', 'level']
+    });
+
+    res.json({
+      success: true,
+      stats: {
+        totalAmbassadors,
+        activeAmbassadors,
+        totalTasks,
+        activeTasks,
+        totalReferrals,
+        completedReferrals,
+        topAmbassadors
+      }
+    });
+  } catch (error) {
+    console.error('Get dashboard stats error:', error);
+    res.status(500).json({ message: 'Failed to fetch dashboard stats' });
+  }
+};
