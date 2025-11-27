@@ -19,8 +19,12 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Health check route
+// Health check routes
 app.get('/health', (req, res) => {
+  res.json({ status: 'OK', message: 'Stucare Ambassador API is running' });
+});
+
+app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Stucare Ambassador API is running' });
 });
 
