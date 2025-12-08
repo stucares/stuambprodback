@@ -11,5 +11,6 @@ router.put('/profile', ambassadorController.updateProfile);
 router.get('/stats', ambassadorController.getStats);
 router.get('/tasks', ambassadorController.getTasks);
 router.get('/referrals', ambassadorController.getReferrals);
+router.get('/meeting-details', ambassadorController.getMeetingDetails);
 
 module.exports = router;

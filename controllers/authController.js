@@ -12,7 +12,7 @@ const generateToken = (id, type) => {
   return jwt.sign(
     { id, type },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN }
+    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
 };
 
@@ -24,6 +24,11 @@ exports.registerAmbassador = async (req, res) => {
     // Validate required fields
     if (!name || !email || !password || !age || !collegeName || !phoneNumber) {
       return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    // Validate phone number (must be exactly 10 digits)
+    if (!/^\d{10}$/.test(phoneNumber)) {
+      return res.status(400).json({ message: 'Phone number must be exactly 10 digits' });
     }
 
     // Check if email already exists

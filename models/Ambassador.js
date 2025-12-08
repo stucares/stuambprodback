@@ -17,12 +17,7 @@ const Ambassador = sequelize.define('Ambassador', {
     allowNull: false,
     unique: true,
     validate: {
-      isEmail: true,
-      isEduEmail(value) {
-        if (!value.endsWith('.edu') && !value.includes('.edu.')) {
-          throw new Error('Must be an educational email address');
-        }
-      }
+      isEmail: true
     }
   },
   password: {
@@ -47,7 +42,7 @@ const Ambassador = sequelize.define('Ambassador', {
     allowNull: false
   },
   avatar: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT('long'),
     defaultValue: 'https://api.dicebear.com/7.x/avataaars/svg?seed=default'
   },
   referralCount: {
@@ -57,6 +52,34 @@ const Ambassador = sequelize.define('Ambassador', {
   creditPoints: {
     type: DataTypes.INTEGER,
     defaultValue: 0
+  },
+  upiId: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  lastWithdrawalAt: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  isPremium: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  premiumExpiresAt: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  meetingScheduled: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  meetingDate: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  meetingLink: {
+    type: DataTypes.STRING,
+    allowNull: true
   },
   level: {
     type: DataTypes.STRING,

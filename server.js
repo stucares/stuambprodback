@@ -10,14 +10,17 @@ dotenv.config();
 const authRoutes = require('./routes/authRoutes');
 const ambassadorRoutes = require('./routes/ambassadorRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const withdrawalRoutes = require('./routes/withdrawalRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
+const premiumRoutes = require('./routes/premiumRoutes');
 
 // Initialize Express app
 const app = express();
 
 // Middleware
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Health check routes
 app.get('/health', (req, res) => {
@@ -32,6 +35,9 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/ambassador', ambassadorRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/withdrawal', withdrawalRoutes);
+app.use('/api/payment', paymentRoutes);
+app.use('/api/admin/premium', premiumRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

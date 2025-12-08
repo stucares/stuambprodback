@@ -138,3 +138,46 @@ exports.getReferrals = async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch referrals' });
   }
 };
+
+// Get Meeting Details
+exports.getMeetingDetails = async (req, res) => {
+  try {
+    const ambassador = req.ambassador;
+    
+    if (!ambassador.isPremium) {
+      return res.json({
+        success: true,
+        meeting: null,
+        message: 'Not a premium member'
+      });
+    }
+
+    if (!ambassador.meetingScheduled || !ambassador.meetingDate) {
+      return res.json({
+        success: true,
+        meeting: null,
+        message: 'Meeting not scheduled yet'
+      });
+    }
+
+    res.json({
+      success: true,
+      meeting: {
+        date: ambassador.meetingDate.toLocaleDateString('en-IN', { 
+          weekday: 'long', 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        }),
+        time: ambassador.meetingDate.toLocaleTimeString('en-IN', { 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        }),
+        link: ambassador.meetingLink || 'https://calendly.com/it-stucares/30min'
+      }
+    });
+  } catch (error) {
+    console.error('Get meeting details error:', error);
+    res.status(500).json({ message: 'Failed to fetch meeting details' });
+  }
+};
