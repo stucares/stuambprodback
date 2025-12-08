@@ -17,19 +17,50 @@ const premiumRoutes = require('./routes/premiumRoutes');
 // Initialize Express app
 const app = express();
 
-// CORS Configuration
+// CORS Configuration - support multiple origins
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000', 
+  'https://stucareambassador.com',
+  'https://www.stucareambassador.com'
+];
+
+// Add CORS_ORIGIN from env if specified
+if (process.env.CORS_ORIGIN) {
+  allowedOrigins.push(process.env.CORS_ORIGIN);
+}
+
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, postman)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('❌ CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   optionsSuccessStatus: 200,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range']
 };
 
 // Middleware
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Log all requests in development
+if (process.env.NODE_ENV !== 'production') {
+  app.use((req, res, next) => {
+    console.log(`${req.method} ${req.path} - Origin: ${req.get('origin') || 'none'}`);
+    next();
+  });
+}
 
 // Health check routes
 app.get('/health', (req, res) => {
