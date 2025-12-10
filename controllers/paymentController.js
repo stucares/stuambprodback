@@ -7,7 +7,9 @@ const nodemailer = require('nodemailer');
 const CASHFREE_APP_ID = process.env.CASHFREE_APP_ID;
 const CASHFREE_SECRET_KEY = process.env.CASHFREE_SECRET_KEY;
 const CASHFREE_ENV = process.env.CASHFREE_ENV || 'sandbox';
-const CASHFREE_BASE_URL = CASHFREE_ENV === 'production' 
+
+// Cashfree API Base URL
+const CASHFREE_API_URL = CASHFREE_ENV === 'production' 
   ? 'https://api.cashfree.com/pg' 
   : 'https://sandbox.cashfree.com/pg';
 
@@ -16,58 +18,6 @@ const DEV_MODE = process.env.ENABLE_DEV_MODE === 'true';
 
 // Payment model (in-memory for now, should be in DB)
 const payments = new Map();
-
-// Meeting time slots configuration (IST)
-const MEETING_SLOTS = [
-  { hour: 10, minute: 0 },  // 10:00 AM
-  { hour: 11, minute: 0 },  // 11:00 AM
-  { hour: 12, minute: 0 },  // 12:00 PM
-  { hour: 14, minute: 0 },  // 2:00 PM
-  { hour: 15, minute: 0 },  // 3:00 PM
-  { hour: 16, minute: 0 },  // 4:00 PM
-  { hour: 17, minute: 0 },  // 5:00 PM
-];
-
-// Helper function to get next available meeting slot
-const getNextAvailableSlot = async () => {
-  const now = new Date();
-  const startDate = new Date(now);
-  startDate.setDate(startDate.getDate() + 1); // Start from tomorrow
-  
-  // Try for next 14 days
-  for (let dayOffset = 0; dayOffset < 14; dayOffset++) {
-    const checkDate = new Date(startDate);
-    checkDate.setDate(checkDate.getDate() + dayOffset);
-    
-    // Skip weekends
-    const dayOfWeek = checkDate.getDay();
-    if (dayOfWeek === 0 || dayOfWeek === 6) continue; // Skip Sunday (0) and Saturday (6)
-    
-    // Check each time slot
-    for (const slot of MEETING_SLOTS) {
-      const slotTime = new Date(checkDate);
-      slotTime.setHours(slot.hour, slot.minute, 0, 0);
-      
-      // Check if this slot is already taken
-      const existingMeeting = await Ambassador.findOne({
-        where: {
-          meetingDate: slotTime,
-          meetingScheduled: true
-        }
-      });
-      
-      if (!existingMeeting) {
-        return slotTime; // Found available slot
-      }
-    }
-  }
-  
-  // If no slot found in 14 days, return a default slot
-  const fallbackDate = new Date(startDate);
-  fallbackDate.setDate(fallbackDate.getDate() + 3);
-  fallbackDate.setHours(14, 0, 0, 0);
-  return fallbackDate;
-};
 
 // Email transporter
 const transporter = nodemailer.createTransport({
@@ -80,22 +30,28 @@ const transporter = nodemailer.createTransport({
 
 // Helper function for Cashfree API calls
 const cashfreeRequest = async (endpoint, method = 'POST', data = null) => {
-  const config = {
-    method,
-    url: `${CASHFREE_BASE_URL}${endpoint}`,
-    headers: {
-      'Content-Type': 'application/json',
-      'x-client-id': CASHFREE_APP_ID,
-      'x-client-secret': CASHFREE_SECRET_KEY,
-      'x-api-version': '2023-08-01'
+  try {
+    const config = {
+      method,
+      url: `${CASHFREE_API_URL}${endpoint}`,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-client-id': CASHFREE_APP_ID,
+        'x-client-secret': CASHFREE_SECRET_KEY,
+        'x-api-version': '2023-08-01'
+      }
+    };
+    
+    if (data) {
+      config.data = data;
     }
-  };
-  
-  if (data) {
-    config.data = data;
+    
+    const response = await axios(config);
+    return response;
+  } catch (error) {
+    console.error('Cashfree API Error:', error.response?.data || error.message);
+    throw error;
   }
-  
-  return axios(config);
 };
 
 // Create payment order
@@ -107,64 +63,67 @@ exports.createOrder = async (req, res) => {
     if (!ambassador) {
       return res.status(404).json({ message: 'Ambassador not found' });
     }
-    
-    const ambassadorId = String(ambassador.id);
 
     // Check if already premium
     if (ambassador.isPremium && ambassador.premiumExpiresAt > new Date()) {
       return res.status(400).json({ message: 'You are already a premium member' });
     }
 
-    const orderId = `order_${Date.now()}_${ambassadorId}`;
+    const ambassadorId = String(ambassador.id);
+    const orderId = `order_${Date.now()}_${ambassadorId.slice(0, 8)}`;
     
-    // Ensure phone number is in correct format (10 digits)
+    // Determine plan type and amount
+    const isLifetime = plan === 'lifetime';
+    const orderAmount = isLifetime ? 999 : (amount || 19);
+    
+    // Format phone number (10 digits)
     let phoneNumber = ambassador.phoneNumber || '9999999999';
-    phoneNumber = phoneNumber.replace(/\D/g, ''); // Remove non-digits
-    if (phoneNumber.length > 10) {
-      phoneNumber = phoneNumber.slice(-10); // Get last 10 digits
-    }
+    phoneNumber = phoneNumber.replace(/\D/g, '').slice(-10);
     
-    // Store payment info
+    // Store payment info in memory
     payments.set(orderId, {
       ambassadorId,
-      amount: amount || 19,
+      amount: orderAmount,
       plan: plan || 'monthly',
+      isLifetime,
       status: 'created',
       createdAt: new Date()
     });
 
-    // DEV MODE: Skip Cashfree only if explicitly enabled
+    // DEV MODE: Simulate payment
     if (DEV_MODE) {
-      console.log('⚠️ DEV MODE: Creating simulated payment order');
+      console.log('⚠️  DEV MODE: Simulating payment');
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
       
       return res.json({
         success: true,
-        orderId: orderId,
-        paymentLink: `${frontendUrl}/payment-success?order_id=${orderId}&dev_mode=true`,
+        orderId,
         paymentSessionId: `dev_session_${orderId}`,
-        devMode: true,
-        message: 'Development mode - payment simulation enabled'
+        payment_link: `${frontendUrl}/payment-success?order_id=${orderId}&dev_mode=true`,
+        devMode: true
       });
     }
 
-    // Check for Cashfree credentials
+    // Validate Cashfree credentials
     if (!CASHFREE_APP_ID || !CASHFREE_SECRET_KEY) {
       console.error('❌ Cashfree credentials missing!');
       return res.status(500).json({ 
-        message: 'Payment gateway not configured. Please contact support.',
-        error: 'Missing Cashfree credentials'
+        message: 'Payment gateway not configured',
+        error: 'Missing credentials'
       });
     }
     
-    // PRODUCTION/SANDBOX MODE: Use Cashfree
-    console.log(`🔄 Creating Cashfree order in ${CASHFREE_ENV} mode`);
-    console.log(`📍 Cashfree URL: ${CASHFREE_BASE_URL}`);
-    console.log(`🔑 App ID: ${CASHFREE_APP_ID?.substring(0, 10)}...`);
+    console.log(`\n🔄 Creating Cashfree order`);
+    console.log(`   Environment: ${CASHFREE_ENV}`);
+    console.log(`   API URL: ${CASHFREE_API_URL}`);
+    console.log(`   Order ID: ${orderId}`);
+    console.log(`   Amount: ₹${orderAmount}`);
+    console.log(`   Plan: ${isLifetime ? 'Lifetime' : 'Monthly'}`);
     
+    // Create Cashfree order
     const orderData = {
       order_id: orderId,
-      order_amount: amount || 19,
+      order_amount: orderAmount,
       order_currency: "INR",
       customer_details: {
         customer_id: ambassadorId,
@@ -173,27 +132,37 @@ exports.createOrder = async (req, res) => {
         customer_phone: phoneNumber
       },
       order_meta: {
-        return_url: `${process.env.FRONTEND_URL}/payment-success?order_id=${orderId}`,
-        notify_url: `${process.env.BACKEND_URL}/api/payment/webhook`
-      },
-      order_note: `Premium Ambassador Subscription - ${plan || 'monthly'}`
+        return_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/payment-success?order_id=${orderId}`,
+        notify_url: `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/payment/webhook`
+      }
     };
 
+    console.log('   Sending request to Cashfree...');
     const response = await cashfreeRequest('/orders', 'POST', orderData);
     
-    if (response.data) {
-      console.log('✅ Cashfree order created:', orderId);
+    if (response.data && response.data.payment_session_id) {
+      const { payment_session_id, order_id, order_status } = response.data;
+      
+      console.log(`✅ Order created successfully`);
+      console.log(`   CF Order ID: ${order_id}`);
+      console.log(`   Status: ${order_status}`);
+      console.log(`   Session ID: ${payment_session_id.substring(0, 50)}...`);
+      
+      // Return payment session for frontend to initiate checkout
       res.json({
         success: true,
-        orderId: orderId,
-        paymentLink: response.data.payment_link,
-        paymentSessionId: response.data.payment_session_id
+        orderId: order_id,
+        paymentSessionId: payment_session_id,
+        orderStatus: order_status,
+        environment: CASHFREE_ENV
       });
     } else {
-      throw new Error('Failed to create order');
+      throw new Error('Invalid response from Cashfree');
     }
   } catch (error) {
-    console.error('Create order error:', error.response?.data || error);
+    console.error('\n❌ Order creation failed:');
+    console.error('   Error:', error.response?.data || error.message);
+    
     res.status(500).json({ 
       message: 'Failed to create payment order',
       error: error.response?.data?.message || error.message 
@@ -218,8 +187,19 @@ exports.verifyPayment = async (req, res) => {
       const ambassador = await Ambassador.findByPk(ambassadorId);
       
       if (ambassador) {
-        const expiryDate = new Date();
-        expiryDate.setMonth(expiryDate.getMonth() + 1); // 1 month premium
+        const paymentInfo = payments.get(orderId);
+        const isLifetime = paymentInfo?.isLifetime || false;
+        
+        let expiryDate;
+        if (isLifetime) {
+          // Set expiry to 100 years from now for lifetime
+          expiryDate = new Date();
+          expiryDate.setFullYear(expiryDate.getFullYear() + 100);
+        } else {
+          // 1 month premium for monthly plan
+          expiryDate = new Date();
+          expiryDate.setMonth(expiryDate.getMonth() + 1);
+        }
 
         await ambassador.update({
           isPremium: true,
@@ -258,8 +238,19 @@ exports.verifyPayment = async (req, res) => {
         const ambassador = await Ambassador.findByPk(ambassadorId);
         
         if (ambassador) {
-          const expiryDate = new Date();
-          expiryDate.setMonth(expiryDate.getMonth() + 1); // 1 month premium
+          const paymentInfo = payments.get(orderId);
+          const isLifetime = paymentInfo?.isLifetime || false;
+          
+          let expiryDate;
+          if (isLifetime) {
+            // Set expiry to 100 years from now for lifetime
+            expiryDate = new Date();
+            expiryDate.setFullYear(expiryDate.getFullYear() + 100);
+          } else {
+            // 1 month premium for monthly plan
+            expiryDate = new Date();
+            expiryDate.setMonth(expiryDate.getMonth() + 1);
+          }
 
           await ambassador.update({
             isPremium: true,

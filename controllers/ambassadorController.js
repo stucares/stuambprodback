@@ -53,6 +53,7 @@ exports.updateProfile = async (req, res) => {
 exports.getStats = async (req, res) => {
   try {
     const ambassador = req.ambassador;
+    const isPremium = ambassador.isPremium && new Date(ambassador.premiumExpiresAt) > new Date();
     
     const totalReferrals = await Referral.count({
       where: { ambassadorId: ambassador.id }
@@ -81,7 +82,16 @@ exports.getStats = async (req, res) => {
         totalReferrals,
         completedReferrals,
         pendingReferrals,
-        uniqueCode: ambassador.uniqueCode
+        uniqueCode: ambassador.uniqueCode,
+        isPremium,
+        premiumExpiresAt: ambassador.premiumExpiresAt,
+        pointsMultiplier: isPremium ? 2 : 1,
+        premiumBenefits: isPremium ? [
+          'Exclusive premium tasks with higher rewards',
+          '2x points on all referrals',
+          'Verified blue tick badge',
+          'Priority support'
+        ] : []
       }
     });
   } catch (error) {
@@ -90,11 +100,22 @@ exports.getStats = async (req, res) => {
   }
 };
 
-// Get All Tasks
+// Get All Tasks (filtered by premium status)
 exports.getTasks = async (req, res) => {
   try {
+    const ambassador = req.ambassador;
+    const isPremium = ambassador.isPremium && new Date(ambassador.premiumExpiresAt) > new Date();
+    
+    // Filter tasks based on premium status
+    const whereClause = { isActive: true };
+    if (!isPremium) {
+      // Regular users only see non-premium tasks
+      whereClause.isPremiumOnly = false;
+    }
+    // Premium users see all tasks (no additional filter needed)
+    
     const tasks = await Task.findAll({
-      where: { isActive: true },
+      where: whereClause,
       order: [['createdAt', 'DESC']]
     });
 
@@ -103,13 +124,16 @@ exports.getTasks = async (req, res) => {
       const taskData = task.toJSON();
       return {
         ...taskData,
-        messageTemplate: taskData.messageTemplate.replace(/\{\{CODE\}\}/gi, req.ambassador.uniqueCode)
+        messageTemplate: taskData.messageTemplate.replace(/\{\{CODE\}\}/gi, ambassador.uniqueCode),
+        isPremiumTask: taskData.isPremiumOnly
       };
     });
 
     res.json({
       success: true,
-      tasks: tasksWithCode
+      tasks: tasksWithCode,
+      isPremium,
+      message: isPremium ? 'Showing all tasks (including premium)' : 'Showing regular tasks only'
     });
   } catch (error) {
     console.error('Get tasks error:', error);

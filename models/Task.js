@@ -33,6 +33,11 @@ const Task = sequelize.define('Task', {
     type: DataTypes.INTEGER,
     defaultValue: 0
   },
+  isPremiumOnly: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    comment: 'If true, only premium members can see this task'
+  },
   isActive: {
     type: DataTypes.BOOLEAN,
     defaultValue: true

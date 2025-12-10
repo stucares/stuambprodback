@@ -77,7 +77,8 @@ app.use('/api/ambassador', ambassadorRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/withdrawal', withdrawalRoutes);
 app.use('/api/payment', paymentRoutes);
-app.use('/api/admin/premium', premiumRoutes);
+app.use('/api/premium', premiumRoutes); // Public premium routes
+app.use('/api/admin/premium', premiumRoutes); // Admin premium routes (legacy support)
 
 // Error handling middleware
 app.use((err, req, res, next) => {

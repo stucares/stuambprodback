@@ -118,6 +118,7 @@ exports.getPremiumSettings = async (req, res) => {
       // Create default settings
       const defaultSettings = {
         premiumPrice: 19,
+        lifetimePrice: 999,
         pointsMultiplier: 2,
         dailyTasksEnabled: true,
         welcomeKitEnabled: true,

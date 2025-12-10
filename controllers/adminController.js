@@ -52,7 +52,7 @@ exports.getAmbassador = async (req, res) => {
 // Update Ambassador Stats (Manual)
 exports.updateAmbassadorStats = async (req, res) => {
   try {
-    const { referralCount, creditPoints } = req.body;
+    const { referralCount, creditPoints, isPremium, premiumType } = req.body;
     
     const ambassador = await Ambassador.findByPk(req.params.id);
     
@@ -69,6 +69,27 @@ exports.updateAmbassadorStats = async (req, res) => {
       ambassador.creditPoints = creditPoints;
     }
 
+    // Handle premium status updates
+    if (isPremium !== undefined) {
+      ambassador.isPremium = isPremium;
+      
+      if (isPremium) {
+        // Set expiry based on premium type
+        const expiryDate = new Date();
+        if (premiumType === 'lifetime') {
+          // Set to 100 years for lifetime
+          expiryDate.setFullYear(expiryDate.getFullYear() + 100);
+        } else {
+          // Default to 1 month
+          expiryDate.setMonth(expiryDate.getMonth() + 1);
+        }
+        ambassador.premiumExpiresAt = expiryDate;
+      } else {
+        // Remove premium
+        ambassador.premiumExpiresAt = null;
+      }
+    }
+
     await ambassador.save();
 
     res.json({
@@ -79,7 +100,9 @@ exports.updateAmbassadorStats = async (req, res) => {
         name: ambassador.name,
         referralCount: ambassador.referralCount,
         creditPoints: ambassador.creditPoints,
-        level: ambassador.level
+        level: ambassador.level,
+        isPremium: ambassador.isPremium,
+        premiumExpiresAt: ambassador.premiumExpiresAt
       }
     });
   } catch (error) {
@@ -114,7 +137,7 @@ exports.toggleAmbassadorStatus = async (req, res) => {
 // Create Task
 exports.createTask = async (req, res) => {
   try {
-    const { title, description, productLink, messageTemplate, pointsReward } = req.body;
+    const { title, description, productLink, messageTemplate, pointsReward, isPremiumOnly } = req.body;
 
     if (!title || !description || !productLink || !messageTemplate) {
       return res.status(400).json({ message: 'All fields are required' });
@@ -125,12 +148,13 @@ exports.createTask = async (req, res) => {
       description,
       productLink,
       messageTemplate,
-      pointsReward: pointsReward || 0
+      pointsReward: pointsReward || 0,
+      isPremiumOnly: isPremiumOnly || false
     });
 
     res.status(201).json({
       success: true,
-      message: 'Task created successfully',
+      message: `Task created successfully${isPremiumOnly ? ' (Premium Only)' : ''}`,
       task
     });
   } catch (error) {
@@ -165,7 +189,7 @@ exports.updateTask = async (req, res) => {
       return res.status(404).json({ message: 'Task not found' });
     }
 
-    const { title, description, productLink, messageTemplate, pointsReward, isActive } = req.body;
+    const { title, description, productLink, messageTemplate, pointsReward, isActive, isPremiumOnly } = req.body;
 
     if (title) task.title = title;
     if (description) task.description = description;
@@ -173,6 +197,7 @@ exports.updateTask = async (req, res) => {
     if (messageTemplate) task.messageTemplate = messageTemplate;
     if (pointsReward !== undefined) task.pointsReward = pointsReward;
     if (isActive !== undefined) task.isActive = isActive;
+    if (isPremiumOnly !== undefined) task.isPremiumOnly = isPremiumOnly;
 
     await task.save();
 
@@ -213,8 +238,15 @@ exports.getDashboardStats = async (req, res) => {
   try {
     const totalAmbassadors = await Ambassador.count();
     const activeAmbassadors = await Ambassador.count({ where: { isActive: true } });
+    const premiumAmbassadors = await Ambassador.count({ 
+      where: { 
+        isPremium: true,
+        premiumExpiresAt: { [Op.gt]: new Date() }
+      } 
+    });
     const totalTasks = await Task.count();
     const activeTasks = await Task.count({ where: { isActive: true } });
+    const premiumTasks = await Task.count({ where: { isPremiumOnly: true, isActive: true } });
     const totalReferrals = await Referral.count();
     const completedReferrals = await Referral.count({ where: { status: 'completed' } });
 
@@ -222,7 +254,7 @@ exports.getDashboardStats = async (req, res) => {
     const topAmbassadors = await Ambassador.findAll({
       order: [['referralCount', 'DESC']],
       limit: 10,
-      attributes: ['id', 'name', 'email', 'referralCount', 'creditPoints', 'level']
+      attributes: ['id', 'name', 'email', 'referralCount', 'creditPoints', 'level', 'isPremium']
     });
 
     res.json({
@@ -230,8 +262,10 @@ exports.getDashboardStats = async (req, res) => {
       stats: {
         totalAmbassadors,
         activeAmbassadors,
+        premiumAmbassadors,
         totalTasks,
         activeTasks,
+        premiumTasks,
         totalReferrals,
         completedReferrals,
         topAmbassadors
