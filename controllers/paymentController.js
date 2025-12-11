@@ -227,19 +227,59 @@ exports.verifyPayment = async (req, res) => {
       }
     }
 
-    // PRODUCTION MODE: Fetch order payments from Cashfree
+    // PRODUCTION MODE: First check order status, then fetch payments
+    console.log(`\n🔍 Verifying payment for order: ${orderId}`);
+    
+    // Step 1: Check order status
+    let orderResponse;
+    try {
+      orderResponse = await cashfreeRequest(`/orders/${orderId}`, 'GET');
+      console.log(`   Order Status: ${orderResponse.data.order_status}`);
+    } catch (orderError) {
+      console.error('   ❌ Order not found:', orderError.response?.data || orderError.message);
+      return res.status(404).json({ 
+        success: false,
+        message: 'Order not found' 
+      });
+    }
+    
+    const orderStatus = orderResponse.data.order_status;
+    
+    // If order is not PAID, reject immediately
+    if (orderStatus !== 'PAID') {
+      console.log(`   ⚠️  Order status is ${orderStatus}, not PAID`);
+      return res.status(400).json({ 
+        success: false, 
+        message: `Payment not completed. Order status: ${orderStatus}`,
+        orderStatus 
+      });
+    }
+    
+    // Step 2: Fetch payment details to confirm
     const response = await cashfreeRequest(`/orders/${orderId}/payments`, 'GET');
     
     if (response.data && response.data.length > 0) {
       const payment = response.data[0];
+      console.log(`   Payment Status: ${payment.payment_status}`);
       
       if (payment.payment_status === 'SUCCESS') {
         // Update ambassador to premium
         const ambassador = await Ambassador.findByPk(ambassadorId);
         
         if (ambassador) {
+          // Check if already premium to prevent duplicate processing
+          if (ambassador.isPremium && ambassador.premiumExpiresAt > new Date()) {
+            console.log(`   ⚠️  Ambassador ${ambassadorId} is already premium, skipping update`);
+            return res.status(400).json({ 
+              success: false,
+              message: 'You are already a premium member',
+              alreadyPremium: true
+            });
+          }
+          
           const paymentInfo = payments.get(orderId);
           const isLifetime = paymentInfo?.isLifetime || false;
+          console.log(`   💎 Granting ${isLifetime ? 'Lifetime' : 'Monthly'} premium access`);
           
           let expiryDate;
           if (isLifetime) {
@@ -261,6 +301,8 @@ exports.verifyPayment = async (req, res) => {
 
           // Send confirmation email
           await sendPremiumConfirmationEmail(ambassador);
+          console.log(`   ✅ Premium access granted successfully`);
+          console.log(`   📅 Expiry: ${expiryDate.toLocaleDateString()}`);
 
           // Update payment status
           if (payments.has(orderId)) {
@@ -278,21 +320,34 @@ exports.verifyPayment = async (req, res) => {
             }
           });
         } else {
-          res.status(404).json({ message: 'Ambassador not found' });
+          console.log(`   ❌ Ambassador ${ambassadorId} not found`);
+          res.status(404).json({ 
+            success: false,
+            message: 'Ambassador not found' 
+          });
         }
       } else {
+        console.log(`   ❌ Payment status is ${payment.payment_status}, not SUCCESS`);
         res.status(400).json({ 
           success: false, 
           message: 'Payment not successful',
-          status: payment.payment_status 
+          paymentStatus: payment.payment_status 
         });
       }
     } else {
-      res.status(404).json({ message: 'Payment not found' });
+      console.log('   ❌ No payment records found for this order');
+      res.status(404).json({ 
+        success: false,
+        message: 'No payment found for this order' 
+      });
     }
   } catch (error) {
-    console.error('Verify payment error:', error.response?.data || error);
-    res.status(500).json({ 
+    console.error('\n❌ Verify payment error:', error.response?.data || error.message);
+    
+    // Return proper error response
+    const statusCode = error.response?.status || 500;
+    res.status(statusCode).json({ 
+      success: false,
       message: 'Failed to verify payment',
       error: error.response?.data?.message || error.message 
     });
@@ -326,12 +381,35 @@ exports.handleWebhook = async (req, res) => {
       const orderId = order.order_id;
       const customerId = order.customer_details.customer_id;
 
+      console.log(`\n📬 Webhook received: PAYMENT_SUCCESS for order ${orderId}`);
+
+      // Verify payment status before processing
+      if (payment.payment_status !== 'SUCCESS') {
+        console.log(`   ⚠️  Payment status is ${payment.payment_status}, not SUCCESS. Ignoring webhook.`);
+        return res.json({ success: true, message: 'Payment not successful, ignored' });
+      }
+
       // Update ambassador to premium
       const ambassador = await Ambassador.findByPk(customerId);
       
-      if (ambassador && !ambassador.isPremium) {
-        const expiryDate = new Date();
-        expiryDate.setMonth(expiryDate.getMonth() + 1);
+      if (ambassador) {
+        // Check if already premium to prevent duplicate processing
+        if (ambassador.isPremium && ambassador.premiumExpiresAt > new Date()) {
+          console.log(`   ℹ️  Ambassador ${customerId} is already premium, skipping webhook processing`);
+          return res.json({ success: true, message: 'Already premium' });
+        }
+
+        const paymentInfo = payments.get(orderId);
+        const isLifetime = paymentInfo?.isLifetime || false;
+        
+        let expiryDate;
+        if (isLifetime) {
+          expiryDate = new Date();
+          expiryDate.setFullYear(expiryDate.getFullYear() + 100);
+        } else {
+          expiryDate = new Date();
+          expiryDate.setMonth(expiryDate.getMonth() + 1);
+        }
 
         const meetingDate = new Date();
         meetingDate.setDate(meetingDate.getDate() + 2);
@@ -346,6 +424,7 @@ exports.handleWebhook = async (req, res) => {
         });
 
         await sendPremiumConfirmationEmail(ambassador, meetingDate);
+        console.log(`   ✅ Webhook processed: Premium granted to ${ambassador.name}`);
       }
 
       // Update payment status
