@@ -7,9 +7,16 @@ exports.getProfile = async (req, res) => {
       attributes: { exclude: ['password'] }
     });
 
+    // Hide unique code if not approved by admin
+    const response = ambassador.toJSON();
+    if (!ambassador.uniqueCodeApproved) {
+      response.uniqueCode = null;
+      response.uniqueCodeMessage = 'Your unique code is pending admin approval';
+    }
+
     res.json({
       success: true,
-      ambassador
+      ambassador: response
     });
   } catch (error) {
     console.error('Get profile error:', error);

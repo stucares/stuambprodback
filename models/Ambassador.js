@@ -41,6 +41,16 @@ const Ambassador = sequelize.define('Ambassador', {
     unique: true,
     allowNull: false
   },
+  uniqueCodeApproved: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    allowNull: false
+  },
+  referredBy: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    comment: 'Unique code of the ambassador who referred this user'
+  },
   avatar: {
     type: DataTypes.TEXT('long'),
     defaultValue: 'https://api.dicebear.com/7.x/avataaars/svg?seed=default'

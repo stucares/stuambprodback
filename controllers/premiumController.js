@@ -172,4 +172,63 @@ exports.updatePremiumSettings = async (req, res) => {
   }
 };
 
+// Get referral settings
+exports.getReferralSettings = async (req, res) => {
+  try {
+    let settings = await SystemSettings.findOne({ where: { key: 'referral_settings' } });
+    
+    if (!settings) {
+      // Create default settings
+      const defaultSettings = {
+        pointsPerReferral: 50,
+        enabled: true,
+        requireVerification: true,
+        bonusForPremiumReferral: 100
+      };
+
+      settings = await SystemSettings.create({
+        key: 'referral_settings',
+        value: JSON.stringify(defaultSettings)
+      });
+    }
+
+    res.json({
+      success: true,
+      settings: JSON.parse(settings.value)
+    });
+  } catch (error) {
+    console.error('Get referral settings error:', error);
+    res.status(500).json({ message: 'Failed to fetch referral settings' });
+  }
+};
+
+// Update referral settings
+exports.updateReferralSettings = async (req, res) => {
+  try {
+    const newSettings = req.body;
+
+    let settings = await SystemSettings.findOne({ where: { key: 'referral_settings' } });
+    
+    if (!settings) {
+      settings = await SystemSettings.create({
+        key: 'referral_settings',
+        value: JSON.stringify(newSettings)
+      });
+    } else {
+      await settings.update({
+        value: JSON.stringify(newSettings)
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Referral settings updated successfully',
+      settings: JSON.parse(settings.value)
+    });
+  } catch (error) {
+    console.error('Update referral settings error:', error);
+    res.status(500).json({ message: 'Failed to update referral settings' });
+  }
+};
+
 module.exports = exports;

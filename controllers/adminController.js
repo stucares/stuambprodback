@@ -276,3 +276,32 @@ exports.getDashboardStats = async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch dashboard stats' });
   }
 };
+
+// Approve unique code for ambassador
+exports.approveUniqueCode = async (req, res) => {
+  try {
+    const { approved } = req.body;
+    const ambassador = await Ambassador.findByPk(req.params.id);
+    
+    if (!ambassador) {
+      return res.status(404).json({ message: 'Ambassador not found' });
+    }
+
+    ambassador.uniqueCodeApproved = approved;
+    await ambassador.save();
+
+    res.json({
+      success: true,
+      message: approved ? 'Unique code approved and shared with ambassador' : 'Unique code approval revoked',
+      ambassador: {
+        id: ambassador.id,
+        name: ambassador.name,
+        uniqueCode: ambassador.uniqueCode,
+        uniqueCodeApproved: ambassador.uniqueCodeApproved
+      }
+    });
+  } catch (error) {
+    console.error('Approve unique code error:', error);
+    res.status(500).json({ message: 'Failed to approve unique code' });
+  }
+};

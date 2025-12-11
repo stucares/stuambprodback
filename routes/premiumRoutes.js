@@ -6,6 +6,7 @@ const { authenticateAdmin } = require('../middleware/auth');
 // Public routes (no auth required)
 // Premium settings (read-only for users to see pricing)
 router.get('/settings', premiumController.getPremiumSettings);
+router.get('/referral-settings', premiumController.getReferralSettings);
 
 // Admin-only routes
 router.use(authenticateAdmin);
@@ -18,5 +19,6 @@ router.put('/members/:ambassadorId/meeting', premiumController.updateMeeting);
 
 // Premium settings update (admin only)
 router.put('/settings', premiumController.updatePremiumSettings);
+router.put('/referral-settings', premiumController.updateReferralSettings);
 
 module.exports = router;

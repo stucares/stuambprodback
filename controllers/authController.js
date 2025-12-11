@@ -19,7 +19,7 @@ const generateToken = (id, type) => {
 // Ambassador Registration
 exports.registerAmbassador = async (req, res) => {
   try {
-    const { name, email, password, age, collegeName, phoneNumber } = req.body;
+    const { name, email, password, age, collegeName, phoneNumber, referralCode } = req.body;
 
     // Validate required fields
     if (!name || !email || !password || !age || !collegeName || !phoneNumber) {
@@ -35,6 +35,20 @@ exports.registerAmbassador = async (req, res) => {
     const existingAmbassador = await Ambassador.findOne({ where: { email } });
     if (existingAmbassador) {
       return res.status(400).json({ message: 'Email already registered' });
+    }
+
+    // Validate referral code if provided
+    let referrer = null;
+    if (referralCode) {
+      referrer = await Ambassador.findOne({ 
+        where: { 
+          uniqueCode: referralCode,
+          uniqueCodeApproved: true  // Only approved codes can be used for referrals
+        } 
+      });
+      if (!referrer) {
+        return res.status(400).json({ message: 'Invalid or unapproved referral code' });
+      }
     }
 
     // Generate unique code
@@ -55,8 +69,26 @@ exports.registerAmbassador = async (req, res) => {
       collegeName,
       phoneNumber,
       uniqueCode,
+      referredBy: referralCode || null,
+      uniqueCodeApproved: false,  // Needs admin approval
       avatar: req.body.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`
     });
+
+    // If referred, update referrer's stats and award points
+    if (referrer) {
+      // Get referral settings
+      const { SystemSettings } = require('../models');
+      let settings = await SystemSettings.findOne({ where: { key: 'referral_settings' } });
+      const referralSettings = settings ? JSON.parse(settings.value) : { pointsPerReferral: 50 };
+      
+      // Update referrer
+      await referrer.update({
+        referralCount: referrer.referralCount + 1,
+        creditPoints: referrer.creditPoints + referralSettings.pointsPerReferral
+      });
+      referrer.updateLevel();
+      await referrer.save();
+    }
 
     // Generate token
     const token = generateToken(ambassador.id, 'ambassador');
@@ -68,8 +100,8 @@ exports.registerAmbassador = async (req, res) => {
         id: ambassador.id,
         name: ambassador.name,
         email: ambassador.email,
-        uniqueCode: ambassador.uniqueCode,
-        level: ambassador.level
+        level: ambassador.level,
+        referredBy: referralCode || null
       }
     });
   } catch (error) {

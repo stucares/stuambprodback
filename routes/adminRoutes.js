@@ -12,6 +12,7 @@ router.get('/ambassadors', adminController.getAllAmbassadors);
 router.get('/ambassadors/:id', adminController.getAmbassador);
 router.put('/ambassadors/:id/stats', adminController.updateAmbassadorStats);
 router.put('/ambassadors/:id/toggle-status', adminController.toggleAmbassadorStatus);
+router.put('/ambassadors/:id/approve-code', adminController.approveUniqueCode);
 
 // Task management
 router.post('/tasks', adminController.createTask);
