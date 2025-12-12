@@ -305,3 +305,69 @@ exports.approveUniqueCode = async (req, res) => {
     res.status(500).json({ message: 'Failed to approve unique code' });
   }
 };
+
+// Bulk update ambassadors from CSV
+exports.bulkUpdateFromCSV = async (req, res) => {
+  try {
+    const { data, pointsPerReferral } = req.body;
+    
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      return res.status(400).json({ message: 'Invalid CSV data' });
+    }
+
+    const results = {
+      updated: 0,
+      failed: 0,
+      errors: []
+    };
+
+    // Process each row
+    for (const row of data) {
+      try {
+        const { uniqueCode, referralCount } = row;
+        
+        if (!uniqueCode || referralCount === undefined) {
+          results.failed++;
+          results.errors.push({ uniqueCode: uniqueCode || 'Unknown', error: 'Missing required fields' });
+          continue;
+        }
+
+        // Find ambassador by unique code
+        const ambassador = await Ambassador.findOne({ where: { uniqueCode } });
+        
+        if (!ambassador) {
+          results.failed++;
+          results.errors.push({ uniqueCode, error: 'Ambassador not found' });
+          continue;
+        }
+
+        // Calculate points (new referrals * points per referral)
+        const oldReferralCount = ambassador.referralCount || 0;
+        const newReferralCount = parseInt(referralCount);
+        const referralIncrease = Math.max(0, newReferralCount - oldReferralCount);
+        const pointsToAdd = referralIncrease * (pointsPerReferral || 50);
+
+        // Update ambassador
+        ambassador.referralCount = newReferralCount;
+        ambassador.creditPoints = (ambassador.creditPoints || 0) + pointsToAdd;
+        ambassador.updateLevel(); // Update level based on new referral count
+        
+        await ambassador.save();
+        
+        results.updated++;
+      } catch (error) {
+        results.failed++;
+        results.errors.push({ uniqueCode: row.uniqueCode, error: error.message });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Bulk update completed. Updated: ${results.updated}, Failed: ${results.failed}`,
+      results
+    });
+  } catch (error) {
+    console.error('Bulk update error:', error);
+    res.status(500).json({ message: 'Failed to process bulk update' });
+  }
+};
