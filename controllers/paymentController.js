@@ -28,6 +28,39 @@ const transporter = nodemailer.createTransport({
   }
 });
 
+// Helper function to award referral points when someone purchases premium
+const awardReferralPoints = async (ambassador) => {
+  try {
+    // Check if this user was referred by someone
+    if (ambassador.referredBy) {
+      const referrer = await Ambassador.findOne({ 
+        where: { uniqueCode: ambassador.referredBy } 
+      });
+      
+      if (referrer) {
+        // Get referral settings
+        const { SystemSettings } = require('../models');
+        let settings = await SystemSettings.findOne({ where: { key: 'referral_settings' } });
+        const referralSettings = settings ? JSON.parse(settings.value) : { 
+          pointsPerReferral: 50,
+          bonusForPremiumReferral: 100 
+        };
+        
+        // Award points for premium referral
+        const pointsToAward = referralSettings.pointsPerReferral + (referralSettings.bonusForPremiumReferral || 0);
+        
+        await referrer.update({
+          creditPoints: referrer.creditPoints + pointsToAward
+        });
+        
+        console.log(`   🎁 Awarded ${pointsToAward} points to referrer ${referrer.uniqueCode}`);
+      }
+    }
+  } catch (error) {
+    console.error('Error awarding referral points:', error);
+  }
+};
+
 // Helper function for Cashfree API calls
 const cashfreeRequest = async (endpoint, method = 'POST', data = null) => {
   try {
@@ -208,6 +241,9 @@ exports.verifyPayment = async (req, res) => {
           meetingLink: `https://calendly.com/it-stucares/30min`
         });
 
+        // Award referral points to referrer
+        await awardReferralPoints(ambassador);
+
         // Update payment status in memory
         if (payments.has(orderId)) {
           const paymentInfo = payments.get(orderId);
@@ -298,6 +334,9 @@ exports.verifyPayment = async (req, res) => {
             meetingScheduled: false,
             meetingLink: `https://calendly.com/it-stucares/30min`
           });
+
+          // Award referral points to referrer
+          await awardReferralPoints(ambassador);
 
           // Send confirmation email
           await sendPremiumConfirmationEmail(ambassador);
@@ -422,6 +461,9 @@ exports.handleWebhook = async (req, res) => {
           meetingDate: meetingDate,
           meetingLink: `https://calendly.com/it-stucares/30min`
         });
+
+        // Award referral points to referrer
+        await awardReferralPoints(ambassador);
 
         await sendPremiumConfirmationEmail(ambassador, meetingDate);
         console.log(`   ✅ Webhook processed: Premium granted to ${ambassador.name}`);

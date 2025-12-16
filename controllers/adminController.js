@@ -14,9 +14,33 @@ exports.getAllAmbassadors = async (req, res) => {
       }]
     });
 
+    // Calculate pending and premium referrals for each ambassador
+    const ambassadorsWithStats = await Promise.all(ambassadors.map(async (ambassador) => {
+      const ambassadorData = ambassador.toJSON();
+      
+      // Count how many people used this ambassador's referral code
+      const referredUsers = await Ambassador.count({
+        where: { referredBy: ambassador.uniqueCode }
+      });
+      
+      // Count how many of those became premium
+      const premiumReferrals = await Ambassador.count({
+        where: { 
+          referredBy: ambassador.uniqueCode,
+          isPremium: true
+        }
+      });
+      
+      ambassadorData.totalReferrals = referredUsers;
+      ambassadorData.premiumReferrals = premiumReferrals;
+      ambassadorData.pendingReferrals = referredUsers - premiumReferrals;
+      
+      return ambassadorData;
+    }));
+
     res.json({
       success: true,
-      ambassadors
+      ambassadors: ambassadorsWithStats
     });
   } catch (error) {
     console.error('Get ambassadors error:', error);
@@ -341,15 +365,12 @@ exports.bulkUpdateFromCSV = async (req, res) => {
           continue;
         }
 
-        // Calculate points (new referrals * points per referral)
-        const oldReferralCount = ambassador.referralCount || 0;
+        // Update referral count only
+        // Points will be awarded automatically when referred users purchase premium
         const newReferralCount = parseInt(referralCount);
-        const referralIncrease = Math.max(0, newReferralCount - oldReferralCount);
-        const pointsToAdd = referralIncrease * (pointsPerReferral || 50);
 
         // Update ambassador
         ambassador.referralCount = newReferralCount;
-        ambassador.creditPoints = (ambassador.creditPoints || 0) + pointsToAdd;
         ambassador.updateLevel(); // Update level based on new referral count
         
         await ambassador.save();

@@ -231,4 +231,67 @@ exports.updateReferralSettings = async (req, res) => {
   }
 };
 
+// Get popup settings (WhatsApp group, announcements, etc.)
+exports.getPopupSettings = async (req, res) => {
+  try {
+    let settings = await SystemSettings.findOne({ where: { key: 'popup_settings' } });
+    
+    if (!settings) {
+      // Create default settings
+      const defaultSettings = {
+        whatsappGroupLink: '',
+        whatsappEnabled: false,
+        popupTitle: 'Join Our Community!',
+        popupMessage: 'Join our WhatsApp group for exclusive updates and support.',
+        showOnLogin: true,
+        showOnDashboard: true,
+        popupDelaySeconds: 2,
+        buttonText: 'Join WhatsApp Group'
+      };
+
+      settings = await SystemSettings.create({
+        key: 'popup_settings',
+        value: JSON.stringify(defaultSettings)
+      });
+    }
+
+    res.json({
+      success: true,
+      settings: JSON.parse(settings.value)
+    });
+  } catch (error) {
+    console.error('Get popup settings error:', error);
+    res.status(500).json({ message: 'Failed to fetch popup settings' });
+  }
+};
+
+// Update popup settings
+exports.updatePopupSettings = async (req, res) => {
+  try {
+    const newSettings = req.body;
+
+    let settings = await SystemSettings.findOne({ where: { key: 'popup_settings' } });
+    
+    if (!settings) {
+      settings = await SystemSettings.create({
+        key: 'popup_settings',
+        value: JSON.stringify(newSettings)
+      });
+    } else {
+      await settings.update({
+        value: JSON.stringify(newSettings)
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Popup settings updated successfully',
+      settings: JSON.parse(settings.value)
+    });
+  } catch (error) {
+    console.error('Update popup settings error:', error);
+    res.status(500).json({ message: 'Failed to update popup settings' });
+  }
+};
+
 module.exports = exports;

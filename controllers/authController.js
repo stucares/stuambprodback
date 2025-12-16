@@ -74,17 +74,11 @@ exports.registerAmbassador = async (req, res) => {
       avatar: req.body.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`
     });
 
-    // If referred, update referrer's stats and award points
+    // If referred, update referrer's referral count (but don't award points yet)
+    // Points will be awarded when the referred user purchases premium
     if (referrer) {
-      // Get referral settings
-      const { SystemSettings } = require('../models');
-      let settings = await SystemSettings.findOne({ where: { key: 'referral_settings' } });
-      const referralSettings = settings ? JSON.parse(settings.value) : { pointsPerReferral: 50 };
-      
-      // Update referrer
       await referrer.update({
-        referralCount: referrer.referralCount + 1,
-        creditPoints: referrer.creditPoints + referralSettings.pointsPerReferral
+        referralCount: referrer.referralCount + 1
       });
       referrer.updateLevel();
       await referrer.save();
