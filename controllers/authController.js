@@ -1,6 +1,7 @@
 const { Ambassador, Admin } = require('../models');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
+const { sendWelcomeEmail } = require('../services/emailService');
 
 // Generate unique ambassador code
 const generateUniqueCode = () => {
@@ -86,6 +87,13 @@ exports.registerAmbassador = async (req, res) => {
 
     // Generate token
     const token = generateToken(ambassador.id, 'ambassador');
+
+    // Send welcome email (don't wait for it to complete)
+    sendWelcomeEmail({
+      name: ambassador.name,
+      email: ambassador.email,
+      uniqueCode: ambassador.uniqueCode
+    }).catch(err => console.error('Failed to send welcome email:', err));
 
     res.status(201).json({
       message: 'Registration successful',

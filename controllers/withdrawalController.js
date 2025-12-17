@@ -1,5 +1,6 @@
 const { Withdrawal, Ambassador, SystemSettings } = require('../models');
 const { Op } = require('sequelize');
+const { sendWithdrawalNotification, sendWithdrawalApprovalEmail } = require('../services/emailService');
 
 // Get system settings
 exports.getSystemSettings = async (req, res) => {
@@ -115,6 +116,16 @@ exports.requestWithdrawal = async (req, res) => {
       ambassador.upiId = upiId;
       await ambassador.save();
     }
+
+    // Send withdrawal notification email
+    sendWithdrawalNotification({
+      name: ambassador.name,
+      email: ambassador.email,
+      amount: amount,
+      upiId: upiId,
+      requestId: withdrawal.id,
+      requestedAt: withdrawal.createdAt
+    }).catch(err => console.error('Failed to send withdrawal notification:', err));
     
     res.status(201).json({
       success: true,
@@ -223,6 +234,16 @@ exports.updateWithdrawalStatus = async (req, res) => {
     }
     
     await withdrawal.save();
+
+    // Send email notification when withdrawal is approved
+    if (status === 'completed' && oldStatus !== 'completed') {
+      sendWithdrawalApprovalEmail({
+        name: withdrawal.ambassador.name,
+        email: withdrawal.ambassador.email,
+        amount: withdrawal.amount,
+        upiId: withdrawal.upiId
+      }).catch(err => console.error('Failed to send withdrawal approval email:', err));
+    }
     
     res.json({
       success: true,
