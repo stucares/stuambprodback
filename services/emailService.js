@@ -1,28 +1,46 @@
-const nodemailer = require('nodemailer');
+const axios = require('axios');
 
-// Create email transporter for Zepto Mail
-const createTransporter = () => {
-  return nodemailer.createTransporter({
-    host: process.env.ZOHO_SMTP_HOST || 'smtp.zeptomail.in',
-    port: process.env.ZOHO_SMTP_PORT || 587,
-    secure: false, // use TLS
-    auth: {
-      user: process.env.ZOHO_EMAIL_USER || 'emailapikey',
-      pass: process.env.ZOHO_EMAIL_PASSWORD,
-    },
-  });
+// Zepto Mail API configuration
+const ZEPTO_API_URL = process.env.ZEPTO_MAIL_URL || 'https://api.zeptomail.in/v1.1/email';
+const ZEPTO_TOKEN = process.env.ZEPTO_MAIL_TOKEN;
+const EMAIL_FROM_ADDRESS = process.env.EMAIL_FROM_ADDRESS || 'noreply@stucareambassador.com';
+const EMAIL_FROM_NAME = process.env.EMAIL_FROM_NAME || 'Stucare Ambassador';
+
+// Send email using Zepto Mail API
+const sendEmail = async (to, subject, htmlContent) => {
+  try {
+    const response = await axios.post(ZEPTO_API_URL, {
+      from: {
+        address: EMAIL_FROM_ADDRESS,
+        name: EMAIL_FROM_NAME
+      },
+      to: [{
+        email_address: {
+          address: to,
+          name: to.split('@')[0]
+        }
+      }],
+      subject: subject,
+      htmlbody: htmlContent
+    }, {
+      headers: {
+        'Authorization': ZEPTO_TOKEN,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    console.log('✅ Email sent successfully:', response.data);
+    return { success: true, messageId: response.data.request_id };
+  } catch (error) {
+    console.error('❌ Failed to send email:', error.response?.data || error.message);
+    return { success: false, error: error.message };
+  }
 };
 
 // Send welcome email to new ambassador
 const sendWelcomeEmail = async (ambassadorData) => {
   try {
-    const transporter = createTransporter();
-    
-    const mailOptions = {
-      from: `"${process.env.EMAIL_FROM_NAME || 'Stucare Ambassador'}" <noreply@stucareambassador.com>`,
-      to: ambassadorData.email,
-      subject: '🎉 Welcome to Stucare Ambassador Program!',
-      html: `
+    const htmlContent = `
         <!DOCTYPE html>
         <html>
         <head>
@@ -137,12 +155,13 @@ const sendWelcomeEmail = async (ambassadorData) => {
           </div>
         </body>
         </html>
-      `
-    };
+      `;
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log('✅ Welcome email sent:', info.messageId);
-    return { success: true, messageId: info.messageId };
+    return await sendEmail(
+      ambassadorData.email,
+      '🎉 Welcome to Stucare Ambassador Program!',
+      htmlContent
+    );
   } catch (error) {
     console.error('❌ Failed to send welcome email:', error);
     return { success: false, error: error.message };
@@ -152,13 +171,7 @@ const sendWelcomeEmail = async (ambassadorData) => {
 // Send withdrawal request notification
 const sendWithdrawalNotification = async (withdrawalData) => {
   try {
-    const transporter = createTransporter();
-    
-    const mailOptions = {
-      from: `"${process.env.EMAIL_FROM_NAME || 'Stucare Ambassador'}" <noreply@stucareambassador.com>`,
-      to: withdrawalData.email,
-      subject: '💰 Withdrawal Request Received',
-      html: `
+    const htmlContent = `
         <!DOCTYPE html>
         <html>
         <head>
@@ -283,12 +296,13 @@ const sendWithdrawalNotification = async (withdrawalData) => {
           </div>
         </body>
         </html>
-      `
-    };
+      `;
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log('✅ Withdrawal notification sent:', info.messageId);
-    return { success: true, messageId: info.messageId };
+    return await sendEmail(
+      withdrawalData.email,
+      `💰 Withdrawal Request Received - ₹${withdrawalData.amount}`,
+      htmlContent
+    );
   } catch (error) {
     console.error('❌ Failed to send withdrawal notification:', error);
     return { success: false, error: error.message };
@@ -298,13 +312,7 @@ const sendWithdrawalNotification = async (withdrawalData) => {
 // Send withdrawal approval notification
 const sendWithdrawalApprovalEmail = async (withdrawalData) => {
   try {
-    const transporter = createTransporter();
-    
-    const mailOptions = {
-      from: `"${process.env.EMAIL_FROM_NAME || 'Stucare Ambassador'}" <noreply@stucareambassador.com>`,
-      to: withdrawalData.email,
-      subject: '✅ Withdrawal Approved - Payment Processed',
-      html: `
+    const htmlContent = `
         <!DOCTYPE html>
         <html>
         <head>
@@ -380,12 +388,13 @@ const sendWithdrawalApprovalEmail = async (withdrawalData) => {
           </div>
         </body>
         </html>
-      `
-    };
+      `;
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log('✅ Withdrawal approval email sent:', info.messageId);
-    return { success: true, messageId: info.messageId };
+    return await sendEmail(
+      withdrawalData.email,
+      '✅ Withdrawal Approved - Payment Processed',
+      htmlContent
+    );
   } catch (error) {
     console.error('❌ Failed to send withdrawal approval email:', error);
     return { success: false, error: error.message };

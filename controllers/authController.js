@@ -89,11 +89,15 @@ exports.registerAmbassador = async (req, res) => {
     const token = generateToken(ambassador.id, 'ambassador');
 
     // Send welcome email (don't wait for it to complete)
+    console.log('🚀 Registration successful, triggering welcome email...');
     sendWelcomeEmail({
       name: ambassador.name,
       email: ambassador.email,
       uniqueCode: ambassador.uniqueCode
-    }).catch(err => console.error('Failed to send welcome email:', err));
+    }).catch(err => {
+      console.error('❌ CRITICAL: Failed to send welcome email:', err);
+      console.error('❌ Error details:', err.message, err.stack);
+    });
 
     res.status(201).json({
       message: 'Registration successful',
