@@ -9,6 +9,7 @@ router.use(authenticateAdmin);
 
 // Ambassador management
 router.get('/ambassadors', adminController.getAllAmbassadors);
+router.get('/ambassadors/download-new-codes', adminController.downloadNewAmbassadorCodes);
 router.get('/ambassadors/:id', adminController.getAmbassador);
 router.put('/ambassadors/:id/stats', adminController.updateAmbassadorStats);
 router.put('/ambassadors/:id/toggle-status', adminController.toggleAmbassadorStatus);

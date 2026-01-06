@@ -9,7 +9,7 @@ const SystemSettings = sequelize.define('SystemSettings', {
   },
   key: {
     type: DataTypes.STRING,
-    unique: true,
+
     allowNull: false,
     comment: 'Setting key (e.g., withdrawal_settings, premium_settings)'
   },
@@ -39,7 +39,13 @@ const SystemSettings = sequelize.define('SystemSettings', {
   }
 }, {
   tableName: 'SystemSettings',
-  timestamps: true
+  timestamps: true,
+  indexes: [
+    {
+      unique: true,
+      fields: ['key']
+    }
+  ]
 });
 
 module.exports = SystemSettings;

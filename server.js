@@ -13,6 +13,7 @@ const adminRoutes = require('./routes/adminRoutes');
 const withdrawalRoutes = require('./routes/withdrawalRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const premiumRoutes = require('./routes/premiumRoutes');
+const passwordRoutes = require('./routes/passwordRoutes');
 
 // Initialize Express app
 const app = express();
@@ -20,7 +21,7 @@ const app = express();
 // CORS Configuration - support multiple origins
 const allowedOrigins = [
   'http://localhost:5173',
-  'http://localhost:3000', 
+  'http://localhost:3000',
   'https://stucareambassador.com',
   'https://www.stucareambassador.com'
 ];
@@ -34,7 +35,7 @@ const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps, curl, postman)
     if (!origin) return callback(null, true);
-    
+
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
@@ -79,6 +80,7 @@ app.use('/api/withdrawal', withdrawalRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/premium', premiumRoutes); // Public premium routes
 app.use('/api/admin/premium', premiumRoutes); // Admin premium routes (legacy support)
+app.use('/api/password', passwordRoutes); // Password reset routes
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -105,6 +107,10 @@ async function startServer() {
     // Test database connection
     await sequelize.authenticate();
     console.log('✅ Database connection established');
+
+    // Sync models with database
+    await sequelize.sync({ alter: true });
+    console.log('✅ Database synchronized');
 
     // Start listening
     app.listen(PORT, () => {

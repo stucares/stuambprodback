@@ -40,6 +40,38 @@ const sendEmail = async (to, subject, htmlContent) => {
 // Send welcome email to new ambassador
 const sendWelcomeEmail = async (ambassadorData) => {
   try {
+    // Check if the account is approved (defaults to false for new registrations)
+    const isApproved = ambassadorData.isApproved || false;
+    
+    // Build dashboard features list - tasks only shown if approved
+    const dashboardFeatures = isApproved 
+      ? `<ul>
+                <li>Track your referrals and earnings</li>
+                <li>Share promotional content</li>
+                <li>Request withdrawals</li>
+                <li>View exclusive tasks</li>
+              </ul>`
+      : `<ul>
+                <li>Track your referrals and earnings</li>
+                <li>Share promotional content</li>
+                <li>Request withdrawals</li>
+              </ul>
+              <p style="color: #f59e0b; font-size: 13px; margin-top: 10px;">⏳ <strong>Note:</strong> Tasks will be available once your account is approved by admin.</p>`;
+    
+    // Build how to earn list - tasks only mentioned if approved
+    const howToEarn = isApproved
+      ? `<ol>
+                <li>Share your unique code with friends</li>
+                <li>When they register and purchase premium, you earn points</li>
+                <li>Complete tasks to earn even more</li>
+                <li>Redeem your points for cash rewards</li>
+              </ol>`
+      : `<ol>
+                <li>Share your unique code with friends</li>
+                <li>When they register and purchase premium, you earn points</li>
+                <li>Redeem your points for cash rewards</li>
+              </ol>`;
+    
     const htmlContent = `
         <!DOCTYPE html>
         <html>
@@ -113,21 +145,16 @@ const sendWelcomeEmail = async (ambassadorData) => {
             
             <p>Congratulations on joining the Stucare Ambassador Program! We're excited to have you on board.</p>
             
-            <div class="code-box">
-              <p style="margin: 0; font-size: 14px; color: #666;">Your Unique Referral Code</p>
-              <div class="code">${ambassadorData.uniqueCode}</div>
-              <p style="margin: 10px 0 0 0; font-size: 12px; color: #999;">Share this code to earn rewards!</p>
-            </div>
-            
             <div class="info-box">
+<<<<<<< Updated upstream
+              <h3 style="margin-top: 0;">⏳ Application Status: Under Review</h3>
+              <p>Your unique referral code is currently <strong>Under Review</strong>. You will receive a separate email with your code once an admin approves your account.</p>
+              <p>In the meantime, you can explore your dashboard and get familiar with the platform.</p>
+=======
               <h3 style="margin-top: 0;">📊 Your Dashboard</h3>
               <p>Access your dashboard to:</p>
-              <ul>
-                <li>Track your referrals and earnings</li>
-                <li>Share promotional content</li>
-                <li>Request withdrawals</li>
-                <li>View exclusive tasks</li>
-              </ul>
+              ${dashboardFeatures}
+>>>>>>> Stashed changes
             </div>
             
             <div style="text-align: center;">
@@ -135,13 +162,18 @@ const sendWelcomeEmail = async (ambassadorData) => {
             </div>
             
             <div class="info-box">
-              <h3 style="margin-top: 0;">💰 How to Earn</h3>
+<<<<<<< Updated upstream
+              <h3 style="margin-top: 0;">💰 How to Earn (Once Approved)</h3>
               <ol>
                 <li>Share your unique code with friends</li>
                 <li>When they register and purchase premium, you earn points</li>
                 <li>Complete tasks to earn even more</li>
                 <li>Redeem your points for cash rewards</li>
               </ol>
+=======
+              <h3 style="margin-top: 0;">💰 How to Earn</h3>
+              ${howToEarn}
+>>>>>>> Stashed changes
             </div>
             
             <p><strong>Need help?</strong> Reply to this email or contact our support team.</p>
@@ -401,8 +433,117 @@ const sendWithdrawalApprovalEmail = async (withdrawalData) => {
   }
 };
 
+// Send unique code approval email
+const sendUniqueCodeApprovedEmail = async (ambassadorData) => {
+  try {
+    const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              line-height: 1.6;
+              color: #333;
+              max-width: 600px;
+              margin: 0 auto;
+              padding: 20px;
+            }
+            .header {
+              background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+              color: white;
+              padding: 30px;
+              text-align: center;
+              border-radius: 10px 10px 0 0;
+            }
+            .content {
+              background: #f9f9f9;
+              padding: 30px;
+              border-radius: 0 0 10px 10px;
+            }
+            .code-box {
+              background: white;
+              border: 2px dashed #10b981;
+              padding: 20px;
+              text-align: center;
+              margin: 20px 0;
+              border-radius: 8px;
+            }
+            .code {
+              font-size: 32px;
+              font-weight: bold;
+              color: #10b981;
+              letter-spacing: 3px;
+            }
+            .button {
+              display: inline-block;
+              background: #10b981;
+              color: white;
+              padding: 12px 30px;
+              text-decoration: none;
+              border-radius: 5px;
+              margin: 20px 0;
+            }
+            .footer {
+              text-align: center;
+              margin-top: 30px;
+              color: #666;
+              font-size: 14px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>✅ Account Approved!</h1>
+          </div>
+          
+          <div class="content">
+            <h2>Hi ${ambassadorData.name}! 🎉</h2>
+            
+            <p>Great news! Your ambassador account has been approved by our team.</p>
+            <p>Here is your unique referral code to start earning:</p>
+            
+            <div class="code-box">
+              <p style="margin: 0; font-size: 14px; color: #666;">Your Unique Referral Code</p>
+              <div class="code">${ambassadorData.uniqueCode}</div>
+              <p style="margin: 10px 0 0 0; font-size: 12px; color: #999;">Share this code to earn rewards!</p>
+            </div>
+            
+            <div style="text-align: center;">
+              <a href="${process.env.FRONTEND_URL}/dashboard" class="button">Go to Dashboard</a>
+            </div>
+            
+            <p><strong>Tips to Earn:</strong></p>
+            <ul>
+              <li>Share your code on social media</li>
+              <li>Tell your friends about the premium benefits</li>
+              <li>Complete daily tasks in your dashboard</li>
+            </ul>
+            
+            <p>Best regards,<br><strong>Team Stucare</strong></p>
+          </div>
+          
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} Stucare. All rights reserved.</p>
+          </div>
+        </body>
+        </html>
+      `;
+
+    return await sendEmail(
+      ambassadorData.email,
+      '✅ Account Approved! Your Unique Code is Inside',
+      htmlContent
+    );
+  } catch (error) {
+    console.error('❌ Failed to send code approval email:', error);
+    return { success: false, error: error.message };
+  }
+};
+
 module.exports = {
   sendWelcomeEmail,
   sendWithdrawalNotification,
-  sendWithdrawalApprovalEmail
+  sendWithdrawalApprovalEmail,
+  sendUniqueCodeApprovedEmail
 };

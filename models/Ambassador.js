@@ -46,13 +46,18 @@ const Ambassador = sequelize.define('Ambassador', {
     defaultValue: false,
     allowNull: false
   },
+  codeDownloaded: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    allowNull: false
+  },
   referredBy: {
     type: DataTypes.STRING,
     allowNull: true,
     comment: 'Unique code of the ambassador who referred this user'
   },
   avatar: {
-    type: DataTypes.TEXT('long'),
+    type: DataTypes.TEXT,
     defaultValue: 'https://api.dicebear.com/7.x/avataaars/svg?seed=default'
   },
   referralCount: {
@@ -118,12 +123,12 @@ const Ambassador = sequelize.define('Ambassador', {
 });
 
 // Method to compare password
-Ambassador.prototype.comparePassword = async function(candidatePassword) {
+Ambassador.prototype.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
 // Method to calculate level based on referral count
-Ambassador.prototype.updateLevel = function() {
+Ambassador.prototype.updateLevel = function () {
   const count = this.referralCount;
   if (count === 0) {
     this.level = 'Rookie';

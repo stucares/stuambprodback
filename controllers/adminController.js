@@ -1,5 +1,6 @@
 const { Ambassador, Task, Referral } = require('../models');
 const { Op } = require('sequelize');
+const { sendUniqueCodeApprovedEmail } = require('../services/emailService');
 
 // Get All Ambassadors
 exports.getAllAmbassadors = async (req, res) => {
@@ -17,24 +18,24 @@ exports.getAllAmbassadors = async (req, res) => {
     // Calculate pending and premium referrals for each ambassador
     const ambassadorsWithStats = await Promise.all(ambassadors.map(async (ambassador) => {
       const ambassadorData = ambassador.toJSON();
-      
+
       // Count how many people used this ambassador's referral code
       const referredUsers = await Ambassador.count({
         where: { referredBy: ambassador.uniqueCode }
       });
-      
+
       // Count how many of those became premium
       const premiumReferrals = await Ambassador.count({
-        where: { 
+        where: {
           referredBy: ambassador.uniqueCode,
           isPremium: true
         }
       });
-      
+
       ambassadorData.totalReferrals = referredUsers;
       ambassadorData.premiumReferrals = premiumReferrals;
       ambassadorData.pendingReferrals = referredUsers - premiumReferrals;
-      
+
       return ambassadorData;
     }));
 
@@ -77,9 +78,9 @@ exports.getAmbassador = async (req, res) => {
 exports.updateAmbassadorStats = async (req, res) => {
   try {
     const { referralCount, creditPoints, isPremium, premiumType } = req.body;
-    
+
     const ambassador = await Ambassador.findByPk(req.params.id);
-    
+
     if (!ambassador) {
       return res.status(404).json({ message: 'Ambassador not found' });
     }
@@ -88,7 +89,7 @@ exports.updateAmbassadorStats = async (req, res) => {
       ambassador.referralCount = referralCount;
       ambassador.updateLevel(); // Update level based on new referral count
     }
-    
+
     if (creditPoints !== undefined) {
       ambassador.creditPoints = creditPoints;
     }
@@ -96,7 +97,7 @@ exports.updateAmbassadorStats = async (req, res) => {
     // Handle premium status updates
     if (isPremium !== undefined) {
       ambassador.isPremium = isPremium;
-      
+
       if (isPremium) {
         // Set expiry based on premium type
         const expiryDate = new Date();
@@ -139,7 +140,7 @@ exports.updateAmbassadorStats = async (req, res) => {
 exports.toggleAmbassadorStatus = async (req, res) => {
   try {
     const ambassador = await Ambassador.findByPk(req.params.id);
-    
+
     if (!ambassador) {
       return res.status(404).json({ message: 'Ambassador not found' });
     }
@@ -208,7 +209,7 @@ exports.getAllTasks = async (req, res) => {
 exports.updateTask = async (req, res) => {
   try {
     const task = await Task.findByPk(req.params.id);
-    
+
     if (!task) {
       return res.status(404).json({ message: 'Task not found' });
     }
@@ -240,7 +241,7 @@ exports.updateTask = async (req, res) => {
 exports.deleteTask = async (req, res) => {
   try {
     const task = await Task.findByPk(req.params.id);
-    
+
     if (!task) {
       return res.status(404).json({ message: 'Task not found' });
     }
@@ -262,11 +263,11 @@ exports.getDashboardStats = async (req, res) => {
   try {
     const totalAmbassadors = await Ambassador.count();
     const activeAmbassadors = await Ambassador.count({ where: { isActive: true } });
-    const premiumAmbassadors = await Ambassador.count({ 
-      where: { 
+    const premiumAmbassadors = await Ambassador.count({
+      where: {
         isPremium: true,
         premiumExpiresAt: { [Op.gt]: new Date() }
-      } 
+      }
     });
     const totalTasks = await Task.count();
     const activeTasks = await Task.count({ where: { isActive: true } });
@@ -306,13 +307,22 @@ exports.approveUniqueCode = async (req, res) => {
   try {
     const { approved } = req.body;
     const ambassador = await Ambassador.findByPk(req.params.id);
-    
+
     if (!ambassador) {
       return res.status(404).json({ message: 'Ambassador not found' });
     }
 
     ambassador.uniqueCodeApproved = approved;
     await ambassador.save();
+
+    // Send email if approved
+    if (approved) {
+      sendUniqueCodeApprovedEmail({
+        name: ambassador.name,
+        email: ambassador.email,
+        uniqueCode: ambassador.uniqueCode
+      }).catch(err => console.error('Failed to send approval email:', err));
+    }
 
     res.json({
       success: true,
@@ -334,7 +344,7 @@ exports.approveUniqueCode = async (req, res) => {
 exports.bulkUpdateFromCSV = async (req, res) => {
   try {
     const { data, pointsPerReferral } = req.body;
-    
+
     if (!data || !Array.isArray(data) || data.length === 0) {
       return res.status(400).json({ message: 'Invalid CSV data' });
     }
@@ -349,7 +359,7 @@ exports.bulkUpdateFromCSV = async (req, res) => {
     for (const row of data) {
       try {
         const { uniqueCode, referralCount } = row;
-        
+
         if (!uniqueCode || referralCount === undefined) {
           results.failed++;
           results.errors.push({ uniqueCode: uniqueCode || 'Unknown', error: 'Missing required fields' });
@@ -358,7 +368,7 @@ exports.bulkUpdateFromCSV = async (req, res) => {
 
         // Find ambassador by unique code
         const ambassador = await Ambassador.findOne({ where: { uniqueCode } });
-        
+
         if (!ambassador) {
           results.failed++;
           results.errors.push({ uniqueCode, error: 'Ambassador not found' });
@@ -372,9 +382,9 @@ exports.bulkUpdateFromCSV = async (req, res) => {
         // Update ambassador
         ambassador.referralCount = newReferralCount;
         ambassador.updateLevel(); // Update level based on new referral count
-        
+
         await ambassador.save();
-        
+
         results.updated++;
       } catch (error) {
         results.failed++;
@@ -390,5 +400,52 @@ exports.bulkUpdateFromCSV = async (req, res) => {
   } catch (error) {
     console.error('Bulk update error:', error);
     res.status(500).json({ message: 'Failed to process bulk update' });
+  }
+};
+
+// Download New Ambassador Unique Codes
+exports.downloadNewAmbassadorCodes = async (req, res) => {
+  try {
+    // Find all ambassadors whose code hasn't been downloaded yet
+    const ambassadors = await Ambassador.findAll({
+      where: {
+        codeDownloaded: false,
+        uniqueCode: { [Op.ne]: null } // Ensure uniqueCode is not null
+      },
+      attributes: ['name', 'uniqueCode', 'id']
+    });
+
+    if (ambassadors.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No new codes found',
+        data: []
+      });
+    }
+
+    // Prepare CSV data
+    const csvData = ambassadors.map(a => ({
+      name: a.name,
+      uniqueCode: a.uniqueCode
+    }));
+
+    // Mark as downloaded
+    await Ambassador.update(
+      { codeDownloaded: true },
+      {
+        where: {
+          id: { [Op.in]: ambassadors.map(a => a.id) }
+        }
+      }
+    );
+
+    res.json({
+      success: true,
+      message: `Found ${ambassadors.length} new codes`,
+      data: csvData
+    });
+  } catch (error) {
+    console.error('Download codes error:', error);
+    res.status(500).json({ message: 'Failed to download codes' });
   }
 };
