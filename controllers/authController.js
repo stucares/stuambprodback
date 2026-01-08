@@ -40,12 +40,16 @@ exports.registerAmbassador = async (req, res) => {
 
     // Validate referral code if provided
     let referrer = null;
+    let validReferralCode = null;
     if (referralCode) {
-      referrer = await Ambassador.findOne({ 
-        where: { 
-          uniqueCode: referralCode,
+      // Normalize code: remove spaces and convert to uppercase
+      validReferralCode = referralCode.trim().toUpperCase();
+
+      referrer = await Ambassador.findOne({
+        where: {
+          uniqueCode: validReferralCode,
           uniqueCodeApproved: true  // Only approved codes can be used for referrals
-        } 
+        }
       });
       if (!referrer) {
         return res.status(400).json({ message: 'Invalid or unapproved referral code' });
@@ -70,7 +74,7 @@ exports.registerAmbassador = async (req, res) => {
       collegeName,
       phoneNumber,
       uniqueCode,
-      referredBy: referralCode || null,
+      referredBy: validReferralCode || null,
       uniqueCodeApproved: false,  // Needs admin approval
       avatar: req.body.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`
     });
@@ -107,7 +111,7 @@ exports.registerAmbassador = async (req, res) => {
         name: ambassador.name,
         email: ambassador.email,
         level: ambassador.level,
-        referredBy: referralCode || null
+        referredBy: validReferralCode || null
       }
     });
   } catch (error) {
