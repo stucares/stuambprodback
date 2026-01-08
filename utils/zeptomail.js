@@ -10,8 +10,8 @@ class ZeptoMailService {
     // Hardcoded API endpoint as per ZeptoMail documentation
     this.apiURL = 'https://api.zeptomail.in/v1.1/email';
     this.token = process.env.ZEPTO_MAIL_TOKEN;
-    this.fromAddress = process.env.ZEPTO_FROM_ADDRESS;
-    this.fromName = process.env.ZEPTO_FROM_NAME;
+    this.fromAddress = process.env.EMAIL_FROM_ADDRESS;
+    this.fromName = process.env.EMAIL_FROM_NAME;
 
     // Validate configuration on initialization
     this.validateConfig();
@@ -26,10 +26,10 @@ class ZeptoMailService {
       console.error('❌ ZEPTO_MAIL_TOKEN is not set in environment variables');
     }
     if (!this.fromAddress) {
-      console.error('❌ ZEPTO_FROM_ADDRESS is not set in environment variables');
+      console.error('❌ EMAIL_FROM_ADDRESS is not set in environment variables');
     }
     if (!this.fromName) {
-      console.error('❌ ZEPTO_FROM_NAME is not set in environment variables');
+      console.error('❌ EMAIL_FROM_NAME is not set in environment variables');
     }
 
     if (this.token && this.fromAddress && this.fromName) {
