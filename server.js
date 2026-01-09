@@ -20,8 +20,6 @@ const app = express();
 
 // CORS Configuration - support multiple origins
 const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:3000',
   'https://stucareambassador.com',
   'https://www.stucareambassador.com'
 ];
