@@ -6,6 +6,7 @@ const axios = require('axios');
 // Ambassador routes
 router.post('/register', authController.registerAmbassador);
 router.post('/login', authController.loginAmbassador);
+router.post('/google', authController.googleLogin);
 
 // Admin routes
 router.post('/admin/login', authController.loginAdmin);
@@ -22,7 +23,7 @@ router.get('/universities', async (req, res) => {
       `http://universities.hipolabs.com/search?name=${encodeURIComponent(name)}`,
       { timeout: 5000 }
     );
-    
+
     res.json(response.data);
   } catch (error) {
     console.error('University API error:', error.message);

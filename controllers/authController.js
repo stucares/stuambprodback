@@ -2,6 +2,7 @@ const { Ambassador, Admin } = require('../models');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const { sendWelcomeEmail } = require('../services/emailService');
+const { OAuth2Client } = require('google-auth-library');
 
 // Generate unique ambassador code
 const generateUniqueCode = () => {
@@ -204,5 +205,130 @@ exports.loginAdmin = async (req, res) => {
   } catch (error) {
     console.error('Admin login error:', error);
     res.status(500).json({ message: 'Login failed' });
+  }
+};
+// Google Login - Production Hardened
+exports.googleLogin = async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    // 1. Validate input
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ message: 'Invalid request: token is required' });
+    }
+
+    // 2. Ensure GOOGLE_CLIENT_ID is configured
+    const googleClientId = process.env.GOOGLE_CLIENT_ID;
+    if (!googleClientId) {
+      console.error('CRITICAL: GOOGLE_CLIENT_ID is not configured in environment variables');
+      return res.status(500).json({ message: 'Server configuration error' });
+    }
+
+    // 3. Create OAuth2Client with the configured client ID
+    const googleClient = new OAuth2Client(googleClientId);
+
+    // 4. Verify Google ID Token with strict audience check
+    let ticket;
+    try {
+      ticket = await googleClient.verifyIdToken({
+        idToken: token,
+        audience: googleClientId, // Strictly verify the audience matches our client ID
+      });
+    } catch (verifyError) {
+      // Log detailed error in development, generic in production
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Google token verification failed:', verifyError.message);
+      }
+      return res.status(401).json({ message: 'Invalid or expired Google token' });
+    }
+
+    // 5. Extract and validate payload
+    const payload = ticket.getPayload();
+
+    if (!payload) {
+      return res.status(401).json({ message: 'Invalid token payload' });
+    }
+
+    // 6. Verify token audience matches our client ID (double-check)
+    if (payload.aud !== googleClientId) {
+      console.error('Token audience mismatch:', payload.aud, '!==', googleClientId);
+      return res.status(401).json({ message: 'Token audience mismatch' });
+    }
+
+    // 7. Verify token issuer
+    const validIssuers = ['accounts.google.com', 'https://accounts.google.com'];
+    if (!validIssuers.includes(payload.iss)) {
+      console.error('Invalid token issuer:', payload.iss);
+      return res.status(401).json({ message: 'Invalid token issuer' });
+    }
+
+    // 8. Check token expiration (library does this, but double-check)
+    const now = Math.floor(Date.now() / 1000);
+    if (payload.exp && payload.exp < now) {
+      return res.status(401).json({ message: 'Token has expired' });
+    }
+
+    // 9. Validate email exists and is verified
+    const { email, name, picture, email_verified } = payload;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email not found in Google token' });
+    }
+
+    // 10. Require email to be verified by Google (production security)
+    if (email_verified === false) {
+      return res.status(403).json({ message: 'Google email is not verified' });
+    }
+
+    // 11. Find ambassador by email (case-insensitive)
+    const ambassador = await Ambassador.findOne({
+      where: { email: email.toLowerCase() }
+    });
+
+    if (!ambassador) {
+      // Don't reveal if account exists or not in production
+      return res.status(404).json({
+        message: 'Account not found. Please register first to provide all required details.',
+        // Only include email/name in non-production for debugging
+        ...(process.env.NODE_ENV !== 'production' && { email, name })
+      });
+    }
+
+    // 12. Check if account is active
+    if (!ambassador.isActive) {
+      return res.status(403).json({ message: 'Account is inactive' });
+    }
+
+    // 13. Generate JWT token
+    const jwtToken = generateToken(ambassador.id, 'ambassador');
+
+    // 14. Log successful authentication (without sensitive data)
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('Google login successful for:', email);
+    }
+
+    res.json({
+      message: 'Login successful',
+      token: jwtToken,
+      ambassador: {
+        id: ambassador.id,
+        name: ambassador.name,
+        email: ambassador.email,
+        uniqueCode: ambassador.uniqueCode,
+        level: ambassador.level,
+        referralCount: ambassador.referralCount,
+        creditPoints: ambassador.creditPoints,
+        avatar: ambassador.avatar
+      }
+    });
+
+  } catch (error) {
+    // Production-safe error logging
+    if (process.env.NODE_ENV === 'production') {
+      console.error('Google Login error:', error.message);
+    } else {
+      console.error('Google Login error:', error);
+    }
+    res.status(500).json({ message: 'Authentication failed' });
   }
 };
