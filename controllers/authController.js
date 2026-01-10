@@ -281,16 +281,48 @@ exports.googleLogin = async (req, res) => {
     }
 
     // 11. Find ambassador by email (case-insensitive)
-    const ambassador = await Ambassador.findOne({
+    let ambassador = await Ambassador.findOne({
       where: { email: email.toLowerCase() }
     });
 
     if (!ambassador) {
-      // Don't reveal if account exists or not in production
-      return res.status(404).json({
-        message: 'Account not found. Please register first to provide all required details.',
-        // Only include email/name in non-production for debugging
-        ...(process.env.NODE_ENV !== 'production' && { email, name })
+      // Auto-create account for first-time Google Sign-In users
+      console.log('Creating new account for Google user:', email);
+
+      // Generate unique code
+      let uniqueCode;
+      let codeExists = true;
+      while (codeExists) {
+        uniqueCode = generateUniqueCode();
+        const existing = await Ambassador.findOne({ where: { uniqueCode } });
+        codeExists = !!existing;
+      }
+
+      // Create new ambassador with Google account info
+      ambassador = await Ambassador.create({
+        name: name || email.split('@')[0], // Use name from Google or email prefix
+        email: email.toLowerCase(),
+        password: null, //  password for Google-authenticated users
+        age: null, // Will need to be filled later
+        collegeName: null, // Will need to be filled later  
+        phoneNumber: null, // Will need to be filled later
+        uniqueCode,
+        referredBy: null,
+        uniqueCodeApproved: false,
+        avatar: picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${name || email}`,
+        googleId: payload.sub, // Store Google ID for future logins
+        isGoogleAuth: true // Flag to identify Google-authenticated users
+      });
+
+      console.log('New Google user account created:', ambassador.id);
+
+      // Send welcome email (don't wait for it to complete)
+      sendWelcomeEmail({
+        name: ambassador.name,
+        email: ambassador.email,
+        uniqueCode: ambassador.uniqueCode
+      }).catch(err => {
+        console.error('❌ Failed to send welcome email:', err.message);
       });
     }
 

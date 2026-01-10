@@ -20,9 +20,10 @@ const app = express();
 
 // CORS Configuration - support multiple origins
 const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5000',
   'https://stucareambassador.com',
-  'https://www.stucareambassador.com',
-  'https://api.stucareambassador.com'
+  'https://www.stucareambassador.com'
 ];
 
 // Add CORS_ORIGIN from env if specified
@@ -44,9 +45,11 @@ const corsOptions = {
   },
   credentials: true,
   optionsSuccessStatus: 200,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  exposedHeaders: ['Content-Range', 'X-Content-Range']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  preflightContinue: false,
+  maxAge: 86400 // 24 hours - cache preflight requests
 };
 
 // Middleware
@@ -108,7 +111,7 @@ async function startServer() {
     console.log('✅ Database connection established');
 
     // Sync models with database
-    await sequelize.sync({ alter: true });
+    // await sequelize.sync({ alter: false });
     console.log('✅ Database synchronized');
 
     // Start listening

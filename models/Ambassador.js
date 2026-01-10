@@ -22,19 +22,30 @@ const Ambassador = sequelize.define('Ambassador', {
   },
   password: {
     type: DataTypes.STRING,
-    allowNull: false
+    allowNull: true // Allow null for Google-authenticated users
   },
   age: {
     type: DataTypes.INTEGER,
-    allowNull: false
+    allowNull: true // Allow null for Google-authenticated users
   },
   collegeName: {
     type: DataTypes.STRING,
-    allowNull: false
+    allowNull: true // Allow null for Google-authenticated users
   },
   phoneNumber: {
     type: DataTypes.STRING,
-    allowNull: false
+    allowNull: true // Allow null for Google-authenticated users
+  },
+  googleId: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    comment: 'Google account ID for OAuth authentication'
+  },
+  isGoogleAuth: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    allowNull: false,
+    comment: 'Flag to identify Google-authenticated users'
   },
   uniqueCode: {
     type: DataTypes.STRING,
@@ -106,6 +117,13 @@ const Ambassador = sequelize.define('Ambassador', {
   }
 }, {
   timestamps: true,
+  indexes: [
+    {
+      unique: true,
+      fields: ['googleId'],
+      name: 'ambassadors_google_id_unique'
+    }
+  ],
   hooks: {
     beforeCreate: async (ambassador) => {
       if (ambassador.password) {
@@ -124,6 +142,10 @@ const Ambassador = sequelize.define('Ambassador', {
 
 // Method to compare password
 Ambassador.prototype.comparePassword = async function (candidatePassword) {
+  // If user is Google-authenticated and has no password, return false
+  if (!this.password) {
+    return false;
+  }
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
