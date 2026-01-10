@@ -1,12 +1,3 @@
-/**
- * Google Auth Migration Script
- * 
- * Run this script to add Google authentication columns to your database.
- * 
- * Usage:
- *   node scripts/migrate-google-auth.js
- */
-
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const { sequelize } = require('../models');
@@ -50,6 +41,46 @@ async function runMigration() {
       console.log('  - Index already exists, skipping');
     });
     console.log('  ✓ Index created\n');
+
+    // Make password nullable for Google users
+    console.log('Making password column nullable...');
+    await sequelize.query(`
+      ALTER TABLE "Ambassadors" 
+      ALTER COLUMN "password" DROP NOT NULL;
+    `).catch(err => {
+      console.log('  - Password already nullable or error:', err.message);
+    });
+    console.log('  ✓ password is now nullable\n');
+
+    // Make age nullable for Google users
+    console.log('Making age column nullable...');
+    await sequelize.query(`
+      ALTER TABLE "Ambassadors" 
+      ALTER COLUMN "age" DROP NOT NULL;
+    `).catch(err => {
+      console.log('  - Age already nullable or error:', err.message);
+    });
+    console.log('  ✓ age is now nullable\n');
+
+    // Make collegeName nullable for Google users
+    console.log('Making collegeName column nullable...');
+    await sequelize.query(`
+      ALTER TABLE "Ambassadors" 
+      ALTER COLUMN "collegeName" DROP NOT NULL;
+    `).catch(err => {
+      console.log('  - collegeName already nullable or error:', err.message);
+    });
+    console.log('  ✓ collegeName is now nullable\n');
+
+    // Make phoneNumber nullable for Google users
+    console.log('Making phoneNumber column nullable...');
+    await sequelize.query(`
+      ALTER TABLE "Ambassadors" 
+      ALTER COLUMN "phoneNumber" DROP NOT NULL;
+    `).catch(err => {
+      console.log('  - phoneNumber already nullable or error:', err.message);
+    });
+    console.log('  ✓ phoneNumber is now nullable\n');
 
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('✅ MIGRATION COMPLETED SUCCESSFULLY!');
