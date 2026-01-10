@@ -355,12 +355,79 @@ exports.googleLogin = async (req, res) => {
     });
 
   } catch (error) {
-    // Production-safe error logging
-    if (process.env.NODE_ENV === 'production') {
-      console.error('Google Login error:', error.message);
-    } else {
-      console.error('Google Login error:', error);
-    }
-    res.status(500).json({ message: 'Authentication failed' });
+    // Enhanced error logging for debugging
+    console.error('❌ Google Login error:', error.message);
+    console.error('Error stack:', error.stack);
+    
+    // Return more descriptive error in development
+    const errorMessage = process.env.NODE_ENV === 'production' 
+      ? 'Authentication failed' 
+      : `Authentication failed: ${error.message}`;
+    
+    res.status(500).json({ 
+      message: errorMessage,
+      ...(process.env.NODE_ENV !== 'production' && { error: error.message })
+    });
   }
+};
+
+// Google OAuth Callback Handler (for redirect-based flow)
+exports.googleCallback = async (req, res) => {
+  const passport = require('../config/passport');
+  
+  // Use passport authenticate with custom callback
+  passport.authenticate('google', { session: false }, async (err, user, info) => {
+    try {
+      // Check for authentication errors
+      if (err) {
+        console.error('❌ Google OAuth error:', err);
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        return res.redirect(`${frontendUrl}/login?error=auth_failed&message=${encodeURIComponent(err.message || 'Authentication failed')}`);
+      }
+
+      // Check if user was authenticated
+      if (!user) {
+        console.error('❌ No user returned from Google');
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        return res.redirect(`${frontendUrl}/login?error=no_user&message=${encodeURIComponent('No user data received')}`);
+      }
+
+      // Generate JWT token
+      const token = generateToken(user.id, 'ambassador');
+
+      // Check if profile is incomplete
+      const profileIncomplete = !user.age || !user.collegeName || !user.phoneNumber;
+
+      // Prepare user data
+      const userData = {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        uniqueCode: user.uniqueCode,
+        level: user.level,
+        referralCount: user.referralCount,
+        creditPoints: user.creditPoints,
+        avatar: user.avatar,
+        profileIncomplete
+      };
+
+      // Encode data for URL transmission
+      const encodedData = encodeURIComponent(JSON.stringify({
+        token,
+        user: userData
+      }));
+
+      // Redirect to frontend with success
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const redirectUrl = `${frontendUrl}/auth/callback?success=true&data=${encodedData}`;
+      
+      console.log('✅ Google OAuth success, redirecting to frontend');
+      res.redirect(redirectUrl);
+
+    } catch (error) {
+      console.error('❌ Error in Google callback:', error);
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      res.redirect(`${frontendUrl}/login?error=callback_failed&message=${encodeURIComponent(error.message || 'Callback processing failed')}`);
+    }
+  })(req, res);
 };

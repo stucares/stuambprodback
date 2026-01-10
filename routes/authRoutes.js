@@ -2,11 +2,27 @@ const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
 const axios = require('axios');
+const passport = require('../config/passport');
 
 // Ambassador routes
 router.post('/register', authController.registerAmbassador);
 router.post('/login', authController.loginAmbassador);
+
+// Google Authentication Routes
+
+// Token-based authentication (existing - for client-side Google Sign-In)
 router.post('/google', authController.googleLogin);
+
+// Server-side OAuth Flow - Initiate
+router.get('/google', 
+  passport.authenticate('google', { 
+    scope: ['profile', 'email'],
+    session: false 
+  })
+);
+
+// Server-side OAuth Flow - Callback
+router.get('/google/callback', authController.googleCallback);
 
 // Admin routes
 router.post('/admin/login', authController.loginAdmin);

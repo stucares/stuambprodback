@@ -20,7 +20,14 @@ const app = express();
 
 // CORS Configuration - support multiple origins
 const allowedOrigins = [
+  // Development
+  // 'http://localhost:5173',
+  // 'http://localhost:5000',
+  // 'http://127.0.0.1:5173',
+  // 'http://127.0.0.1:5000',
+  // Production
   'https://stucareambassador.com',
+  'https://www.stucareambassador.com',
   'https://api.stucareambassador.com'
 ];
 
@@ -54,6 +61,10 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Initialize Passport for Google OAuth
+const passport = require('./config/passport');
+app.use(passport.initialize());
 
 // Log all requests in development
 if (process.env.NODE_ENV !== 'production') {
